@@ -9,6 +9,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/routing/route"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -83,7 +84,7 @@ func NewChannelsCollector(lnd lndclient.LightningClient, errChan chan<- error,
 
 	// Our set of labels, status should either be active or inactive. The
 	// initiator is "true" if we are the initiator, and "false" otherwise.
-	labels := []string{"chan_id", "status", "initiator", "peer"}
+	labels := []string{"chan_id", "status", "initiator", "peer", "peer_alias"}
 	collector := &ChannelsCollector{
 		channelBalanceDesc: prometheus.NewDesc(
 			"lnd_channels_open_balance_sat",
@@ -400,7 +401,9 @@ func (c *ChannelsCollector) Collect(ch chan<- prometheus.Metric) {
 
 	// Next, for each channel we'll export the total sum of our balances,
 	// as well as the number of pending HTLCs.
-	listChannelsResp, err := c.lnd.ListChannels(context.Background(), false, false)
+	listChannelsResp, err := c.lnd.ListChannels(context.Background(), false, false, func(r *lnrpc.ListChannelsRequest) {
+		r.PeerAliasLookup = true
+	})
 	if err != nil {
 		c.errChan <- fmt.Errorf("ChannelsCollector ListChannels "+
 			"failed with: %v", err)
@@ -443,8 +446,8 @@ func (c *ChannelsCollector) Collect(ch chan<- prometheus.Metric) {
 		status := statusLabel(channel)
 		initiator := initiatorLabel(channel)
 		peer := channel.PubKeyBytes.String()
-
 		chanIDStr := strconv.Itoa(int(channel.ChannelID))
+		peerAlias := channel.PeerAlias
 
 		primaryChannel := c.primaryNode != nil &&
 			channel.PubKeyBytes == *c.primaryNode
@@ -458,57 +461,57 @@ func (c *ChannelsCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(
 			c.incomingChanSatDesc, prometheus.GaugeValue,
 			float64(channel.RemoteBalance), chanIDStr, status,
-			initiator, peer,
+			initiator, peer, peerAlias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			c.outgoingChanSatDesc, prometheus.GaugeValue,
 			float64(channel.LocalBalance), chanIDStr, status,
-			initiator, peer,
+			initiator, peer, peerAlias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			c.numPendingHTLCsDesc, prometheus.GaugeValue,
 			float64(channel.NumPendingHtlcs), chanIDStr, status,
-			initiator, peer,
+			initiator, peer, peerAlias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			c.satsSentDesc, prometheus.GaugeValue,
 			float64(channel.TotalSent), chanIDStr, status,
-			initiator, peer,
+			initiator, peer, peerAlias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			c.satsRecvDesc, prometheus.GaugeValue,
 			float64(channel.TotalReceived), chanIDStr, status,
-			initiator, peer,
+			initiator, peer, peerAlias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			c.numUpdatesDesc, prometheus.GaugeValue,
 			float64(channel.NumUpdates), chanIDStr, status,
-			initiator, peer,
+			initiator, peer, peerAlias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			c.csvDelayDesc, prometheus.GaugeValue,
 			float64(channel.LocalConstraints.CsvDelay), chanIDStr,
-			status, initiator, peer,
+			status, initiator, peer, peerAlias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			c.unsettledBalanceDesc, prometheus.GaugeValue,
 			float64(channel.UnsettledBalance), chanIDStr, status,
-			initiator, peer,
+			initiator, peer, peerAlias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			c.feePerKwDesc, prometheus.GaugeValue,
 			float64(channel.FeePerKw), chanIDStr, status, initiator,
-			peer,
+			peer, peerAlias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			c.commitWeightDesc, prometheus.GaugeValue,
 			float64(channel.CommitWeight), chanIDStr, status,
-			initiator, peer,
+			initiator, peer, peerAlias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			c.commitFeeDesc, prometheus.GaugeValue,
 			float64(channel.CommitFee), chanIDStr, status,
-			initiator, peer,
+			initiator, peer, peerAlias,
 		)
 
 		if chanInfo, ok := channelInfoMap[channel.ChannelID]; ok {
@@ -516,44 +519,44 @@ func (c *ChannelsCollector) Collect(ch chan<- prometheus.Metric) {
 			ch <- prometheus.MustNewConstMetric(
 				c.localBaseFeeDesc, prometheus.GaugeValue,
 				float64(localPolicy.FeeBaseMsat),
-				chanIDStr, status, initiator, peer,
+				chanIDStr, status, initiator, peer, peerAlias,
 			)
 			ch <- prometheus.MustNewConstMetric(
 				c.localFeeRateDesc, prometheus.GaugeValue,
 				float64(localPolicy.FeeRateMilliMsat),
-				chanIDStr, status, initiator, peer,
+				chanIDStr, status, initiator, peer, peerAlias,
 			)
 			ch <- prometheus.MustNewConstMetric(
 				c.localInboundBaseFeeDesc, prometheus.GaugeValue,
 				float64(localPolicy.InboundBaseFeeMsat),
-				chanIDStr, status, initiator, peer,
+				chanIDStr, status, initiator, peer, peerAlias,
 			)
 			ch <- prometheus.MustNewConstMetric(
 				c.localInboundFeeRateDesc, prometheus.GaugeValue,
 				float64(localPolicy.InboundFeeRatePPM),
-				chanIDStr, status, initiator, peer,
+				chanIDStr, status, initiator, peer, peerAlias,
 			)
 
 			remotePolicy := chanInfo.Node2Policy
 			ch <- prometheus.MustNewConstMetric(
 				c.remoteBaseFeeDesc, prometheus.GaugeValue,
 				float64(remotePolicy.FeeBaseMsat),
-				chanIDStr, status, initiator, peer,
+				chanIDStr, status, initiator, peer, peerAlias,
 			)
 			ch <- prometheus.MustNewConstMetric(
 				c.remoteFeeRateDesc, prometheus.GaugeValue,
 				float64(remotePolicy.FeeRateMilliMsat),
-				chanIDStr, status, initiator, peer,
+				chanIDStr, status, initiator, peer, peerAlias,
 			)
 			ch <- prometheus.MustNewConstMetric(
 				c.remoteInboundBaseFeeDesc, prometheus.GaugeValue,
 				float64(remotePolicy.InboundBaseFeeMsat),
-				chanIDStr, status, initiator, peer,
+				chanIDStr, status, initiator, peer, peerAlias,
 			)
 			ch <- prometheus.MustNewConstMetric(
 				c.remoteInboundFeeRateDesc, prometheus.GaugeValue,
 				float64(remotePolicy.InboundFeeRatePPM),
-				chanIDStr, status, initiator, peer,
+				chanIDStr, status, initiator, peer, peerAlias,
 			)
 		}
 
@@ -562,7 +565,7 @@ func (c *ChannelsCollector) Collect(ch chan<- prometheus.Metric) {
 			ch <- prometheus.MustNewConstMetric(
 				c.channelUptimeDesc, prometheus.GaugeValue,
 				float64(channel.Uptime)/float64(channel.LifeTime),
-				chanIDStr, status, initiator, peer,
+				chanIDStr, status, initiator, peer, peerAlias,
 			)
 		}
 	}

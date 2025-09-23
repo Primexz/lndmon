@@ -4,7 +4,7 @@ require (
 	github.com/btcsuite/btcd/btcutil v1.1.5
 	github.com/btcsuite/btclog/v2 v2.0.1-0.20250110154127-3ae4bf1cb318
 	github.com/jessevdk/go-flags v1.5.0
-	github.com/lightninglabs/lndclient v0.19.0-13
+	github.com/lightninglabs/lndclient v0.19.0-15
 	github.com/lightningnetwork/lnd v0.19.0-beta
 	github.com/prometheus/client_golang v1.18.0
 	github.com/stretchr/testify v1.10.0
@@ -189,6 +189,6 @@ require (
 // allows us to specify that as an option.
 replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-display v1.30.0-hex-display
 
-go 1.23.6
+go 1.24.6
 
-toolchain go1.23.8
+toolchain go1.24.7

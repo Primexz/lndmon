@@ -33,7 +33,7 @@ type PeerCollector struct {
 func NewPeerCollector(lnd lndclient.LightningClient,
 	errChan chan<- error) *PeerCollector {
 
-	perPeerLabels := []string{"pubkey"}
+	perPeerLabels := []string{"pubkey", "peer_alias"}
 	return &PeerCollector{
 		peerCountDesc: prometheus.NewDesc(
 			"lnd_peer_count", "total number of peers",
@@ -101,26 +101,31 @@ func (p *PeerCollector) Collect(ch chan<- prometheus.Metric) {
 
 	for _, peer := range listPeersResp {
 		pubkeyStr := hex.EncodeToString(peer.Pubkey[:])
+		node, err := p.lnd.GetNodeInfo(context.Background(), peer.Pubkey, false)
+		alias := "unknown"
+		if err == nil {
+			alias = node.Node.Alias
+		}
 
 		ch <- prometheus.MustNewConstMetric(
 			p.pingTimeDesc, prometheus.CounterValue,
-			float64(peer.PingTime), pubkeyStr,
+			float64(peer.PingTime), pubkeyStr, alias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			p.satSentDesc, prometheus.GaugeValue,
-			float64(peer.Sent), pubkeyStr,
+			float64(peer.Sent), pubkeyStr, alias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			p.satRecvDesc, prometheus.GaugeValue,
-			float64(peer.Received), pubkeyStr,
+			float64(peer.Received), pubkeyStr, alias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			p.bytesSentDesc, prometheus.GaugeValue,
-			float64(peer.BytesSent), pubkeyStr,
+			float64(peer.BytesSent), pubkeyStr, alias,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			p.bytesRecvDesc, prometheus.GaugeValue,
-			float64(peer.BytesReceived), pubkeyStr,
+			float64(peer.BytesReceived), pubkeyStr, alias,
 		)
 	}
 }
